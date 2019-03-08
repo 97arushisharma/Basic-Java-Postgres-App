@@ -74,7 +74,7 @@ public class UserController {
 				
 				int c=verify(email);
 				if(c==0) {
-					return "Not Valid Email";
+					return "Not a Valid Email";
 				}
 				else {
 					
@@ -85,10 +85,16 @@ public class UserController {
 				
 			}
 			else if(userfound.getEmail().contentEquals(email) && userfound.getPhone().contentEquals(phone)==false) {
+				int p = verifyp(phone);
+				if(p==0) {
+					return "Not a valid Phone Number";
+				}
+				else {
+					String sql="update userinfo set phone_no= ? where uid= ?;";
+					jdbcTemplate.update( sql, new Object[] { phone, uid});
+					return "Phone No. Updated";
+				}
 				
-				String sql="update userinfo set phone_no= ? where uid= ?;";
-				jdbcTemplate.update( sql, new Object[] { phone, uid});
-				return "Phone No. Updated";
 			}
 			
 			else {
@@ -96,8 +102,9 @@ public class UserController {
 				
 				
 				int c=verify(email);
-				if(c==0) {
-					return "Not Valid Email";
+				int p = verifyp(phone);
+				if(c==0 || p==0) {
+					return "Not a Valid Email or Phone Number";
 				}
 				else {
 					
@@ -165,18 +172,65 @@ public class UserController {
 	}
 	
 	/*Stored procedure for verifying email
-	 * CREATE FUNCTION verifyemail(email varchar(30))
-		RETURNS INT
+	 * CREATE FUNCTION verifyemail(email varchar(30), output int)
+	 * return int
 		LANGUAGE plpgsql
 		AS $$
 		BEGIN
 			IF email ~ '^[A-Za-z0-9._%-]+@[A-Za-z0-9.-]+[.][A-Za-z]+$' then
-			return 1;
-			ELSE return 0;
+			output=1;
+			ELSE output= 0;
 			END IF;
 		END;
 		$$;
 
 	 */
+public int verifyp(String phone) {
+		
+		int output;
+		System.out.println("Hello World");
+		StoredProcedureQuery query = entityManager
+				.createStoredProcedureQuery("phoneno")
+				.registerStoredProcedureParameter(
+				    "phone",
+				    String.class,
+				    ParameterMode.IN
+				)
+				.registerStoredProcedureParameter(
+				    "outputp",
+				    Integer.class,
+				    ParameterMode.OUT
+				)
+				.setParameter("phone", phone);
+				 
+				try {
+				    query.execute();
+				     
+				    output = (int) query
+				      .getOutputParameterValue("outputp");
+				 
+				    
+				} finally {
+				    query.unwrap(ProcedureOutputs.class)
+				    .release();
+				}
+				return output;
+		
+	}
+
+/*
+ *  CREATE OR REPLACE FUNCTION phoneno(in phone varchar(15),out outputp int)
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+BEGIN
+IF phone ~ '^((?!(0))[0-9][0-9]{9})$' then
+outputp=1;
+ELSE outputp=0;
+END IF;
+END;
+$$;
+
+*/
 
 }

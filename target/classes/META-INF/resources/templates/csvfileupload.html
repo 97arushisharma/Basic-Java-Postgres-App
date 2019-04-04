@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>STORE DATA THROUGH CSV FILE</title>
+	
+</head>
+<body>
+	<div align="center">
+	<h1 align="center">STORE DATA THROUGH CSV FILE</h1>
+	
+	 <!-- <form action="#" th:action="@{/info}" th:object="${user}" method="post">
+    	<p>Name: <input type="text" th:field="*{name}" /></p>
+        <p>Phone No.: <input type="text" th:field="*{phone}" /></p>
+        <p>Email ID: <input type="text" th:field="*{email}" /></p>
+        <p><input type="submit" value="Submit" /> </p>
+    </form>-->
+	
+	<form action="" method="POST" action="/uploadcsv" enctype="multipart/form-data">
+	DROP THE CSV FILE:<br>
+	<input type="file" name="file" placeholder="File"><br><br>
+	
+	<input type="submit" value="Upload">
+	</form>
+	</div>
+
+</body>
+</html>

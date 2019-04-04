@@ -1,22 +1,52 @@
 package com.postgretry.postdb;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Multipart;
+import javax.mail.PasswordAuthentication;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Date;
 import java.util.List;
+import java.util.Properties;
+import java.util.Scanner;
+
 
 import javax.persistence.EntityManager;
 import javax.persistence.ParameterMode;
 import javax.persistence.PersistenceContext;
 import javax.persistence.StoredProcedureQuery;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 
+import org.apache.commons.io.FileUtils;
+import org.codehaus.jettison.json.JSONArray;
+import org.codehaus.jettison.json.JSONException;
+import org.codehaus.jettison.json.JSONObject;
 import org.hibernate.procedure.ProcedureOutputs;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 public class UserController {
@@ -27,11 +57,67 @@ public class UserController {
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 	
+	@Value("${gmail.username}")
+	private String username;
+	
+	@Value("${gmail.password}")
+	private String password;
+    
 	@PersistenceContext
 	EntityManager entityManager ;
 	
+	private final UserRepository repository;
+
+	    public UserController(UserRepository repository) {
+	        this.repository = repository;
+	    }
 	
 	
+	@RequestMapping(value="/uploadcsv", method= RequestMethod.GET)
+	public ModelAndView uploadcsv() {
+		ModelAndView model = new ModelAndView("csvfileupload");
+		return model;
+	}
+	@RequestMapping(value = "/uploadcsv",consumes = "multipart/form-data", method = RequestMethod.POST)
+	public String submit(@RequestParam("file") MultipartFile file, ModelMap modelMap) throws FileNotFoundException , IOException{
+		
+//		modelMap.addAttribute("file", file);
+		
+        
+        File convFile = new File(file.getOriginalFilename());
+        convFile.createNewFile(); 
+        FileOutputStream fos = new FileOutputStream(convFile); 
+        fos.write(file.getBytes());
+        fos.close(); 
+        
+	    BufferedReader br = Files.newBufferedReader(convFile.toPath(),
+                StandardCharsets.US_ASCII);
+	    
+	    String line = br.readLine(); 
+	    while (line != null) { 
+	    	UserInfo user = new UserInfo();
+	    	String[] attributes = line.split(","); 
+	    	user.setName(attributes[0]);
+			user.setPhone(attributes[1]);
+			user.setEmail(attributes[2]);
+			repos.save(user);
+	    	line = br.readLine();
+	    }
+
+
+	    
+//        //Set the delimiter used in file
+//        scanner.useDelimiter(",");
+//        String message=" ";
+//        while(scanner.hasNext()) {
+//        	if(scanner.next()=="\n")
+//        	message = message + scanner.next();
+//        }
+////
+//        scanner.close();
+//	    ModelAndView model = new ModelAndView("fileuploadview");
+        return "Data Stored";
+	}
 	
 	@RequestMapping(value="/enterinfo", method= RequestMethod.GET)
 	public ModelAndView store() {
@@ -43,15 +129,31 @@ public class UserController {
 	@RequestMapping(value="/enterinfo", method= RequestMethod.POST)
 	public String storeinfo(@RequestParam("name") String name, @RequestParam("phone") String phone, @RequestParam("email") String email){
 		UserInfo user = new UserInfo();
-		String q="create table if not exits userinfo(uid int,name varchar(30), email varchar(30), phone_no varchar(15));";
-		jdbcTemplate.update(q);
+		
 		
 		user.setName(name);
 		user.setPhone(phone);
 		user.setEmail(email);
 		repos.save(user);
-		return String.format("done: your ID is : %l",user.getUid());
+		return String.format("done: your ID is : %d",user.getUid());
 	}
+	
+	@RequestMapping(value="/sendemail", method= RequestMethod.GET)
+	public ModelAndView email() {
+		ModelAndView model = new ModelAndView("emailpage");
+		return model;
+        //return "store";
+	}
+	
+	@RequestMapping(value="/sendemail", method=RequestMethod.POST)
+	public String email(@RequestParam("name") String name , @RequestParam("address") String address) throws MessagingException, IOException {
+		List<UserInfo> userin = repos.findByName(name);
+		
+		sendmail(userin, address);
+		
+		return "Email Sent Successfully";
+	}
+	
 	@RequestMapping("/save")
 	public String process() {
 		System.out.println("here see this");
@@ -232,5 +334,42 @@ END;
 $$;
 
 */
+
+private void sendmail(List<UserInfo> userin, String address) throws MessagingException, IOException {
+	
+	Properties props = new Properties();
+	props.put("mail.smtp.auth","true");
+	props.put("mail.smtp.starttls.enable","true");
+	props.put("mail.smtp.host","smtp.gmail.com");
+	props.put("mail.smtp.port", "587");
+	
+	Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+		protected PasswordAuthentication getPasswordAuthentication() {
+			return new PasswordAuthentication(username, password);
+		}
+	});
+	
+	Message msg = new MimeMessage(session);
+	msg.setFrom(new InternetAddress(username, false));
+	
+	msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(address));
+	msg.setSubject("Trial");
+	msg.setContent(userin,"text/html");
+	msg.setSentDate(new Date());
+	
+	MimeBodyPart messageBodyPart = new MimeBodyPart();
+	messageBodyPart.setContent(userin.toString(),"text/html");
+	Multipart multipart = new MimeMultipart();
+	multipart.addBodyPart(messageBodyPart);
+	MimeBodyPart attachPart = new MimeBodyPart();
+	
+	attachPart.attachFile("/home/ar.sharma1/Desktop/South-Korea-1.jpg");
+	
+	multipart.addBodyPart(attachPart);
+	msg.setContent(multipart);
+	
+	Transport.send(msg);
+	
+}
 
 }
